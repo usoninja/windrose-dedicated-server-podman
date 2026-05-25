@@ -1695,7 +1695,7 @@ activity_collect_metrics() {
             } else if (line ~ /Name '\''[^'\'']+'\''.*State '\''SaidFarewell'\''/) {
                 tmp = line
                 sub(/^.*Name '\''/, "", tmp)
-                sub(/'\''.*$/, "", tmp)
+                sub(/'\''\. AccountId.*$/, "", tmp)
                 player = tmp
                 type = "leave"
             } else if (low ~ /disconnectaccount.*accountid[[:space:]]+[a-z0-9]+/) {
