@@ -31,8 +31,8 @@ services:
       PORT: ${PORT:-7777}
       QUERYPORT: ${QUERYPORT:-7778}
     volumes:
-      - ./data:/data
-      - ./steam-home:/home/steam
+      - ./data:/data:Z
+      - ./steam-home:/home/steam:Z
     healthcheck:
       test: ["CMD-SHELL", "/opt/windrose/scripts/healthcheck.sh"]
       interval: 30s

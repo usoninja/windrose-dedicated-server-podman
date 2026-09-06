@@ -268,6 +268,10 @@ If your host is slow to start the container after `./windrose update`, increase 
 | `./data`       | `/data`        | Server files, saves, config |
 | `./steam-home` | `/home/steam`  | Wine prefix, SteamCMD cache |
 
+The mounts use Podman's `:Z` label option so they work on SELinux-enabled
+hosts. If you changed the Compose file locally, restore `:Z` on both mounts;
+otherwise SELinux can deny access even when the numeric owner is `1000:1000`.
+
 The host directories must be writable by the user IDs configured in `.env`. The
 recommended setup command creates them automatically. For an existing checkout
 or a directory created by another user, repair ownership before starting:
