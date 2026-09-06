@@ -112,6 +112,7 @@ Behavior and safety notes:
 - Setup is one-off by design: if `.env` already exists, setup exits with a clear message.
 - Setup runs a host precheck before questions: Podman, a Podman Compose provider, RAM >= 8 GB, and free disk >= 8 GB.
 - `PUID` and `PGID` are auto-detected from the current host user.
+- If automatic startup is selected and the configured local image is missing, setup builds it from the current repository before starting the server.
 - If backup upload is enabled and scope is `full`, scope is adjusted to `both`.
 - If `crontab` is missing, setup continues and warns instead of failing.
 - Before auto-start, setup runs preflight checks (`podman compose config`) and warns if `PORT` or `QUERYPORT` are already in use.

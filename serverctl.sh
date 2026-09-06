@@ -3026,14 +3026,27 @@ install_backup_cron() {
 }
 
 ensure_local_image() {
-  local image_name
+  local image_name auto_build="${1:-false}"
   image_name="$(dotenv_value IMAGE_NAME || true)"
   image_name="${image_name:-localhost/windrose-ds:stable}"
 
   log_step "Checking local image $image_name"
   if ! "${PODMAN_CMD[@]}" image exists "$image_name"; then
+    if [[ "$auto_build" == "true" ]]; then
+      log_step_failed
+      log_step "Building local image $image_name"
+      if ! "${PODMAN_CMD[@]}" build --pull=missing -t "$image_name" "$SCRIPT_DIR"; then
+        log_step_failed
+        log_error "Failed to build local image '$image_name'."
+        log_info "Run manually: podman build --pull=missing -t '$image_name' '$SCRIPT_DIR'"
+        exit 1
+      fi
+      log_step_done
+      return 0
+    fi
+
     log_step_failed
-    log_error "Local image '$image_name' was not found. Build it with: podman build -t $image_name ."
+    log_error "Local image '$image_name' was not found. Build it from the repository root with: podman build --pull=missing -t '$image_name' ."
     exit 1
   fi
   log_step_done
@@ -3619,10 +3632,9 @@ setup_server() {
 
     log_info "If LAN clients fail to connect while WAN works, see README: 'Troubleshooting -> LAN clients fail, WAN clients work'."
 
-    log_step "Checking local image"
-    if ! ensure_local_image; then
+    if ! ensure_local_image true; then
       log_step_failed
-      log_error "Local image is unavailable. Build the configured IMAGE_NAME before starting."
+      log_error "Local image is unavailable."
       exit 1
     fi
 
