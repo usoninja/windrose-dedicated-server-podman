@@ -3579,6 +3579,11 @@ setup_server() {
   fi
 
   log_ok "Configuration written to $env_file"
+
+  log_step "Preparing persistent directories"
+  mkdir -p "$SCRIPT_DIR/data" "$SCRIPT_DIR/steam-home"
+  log_step_done
+
   echo
   log_info "Summary:"
   echo -e "  ${_COLOR_CYAN}Server name:${_COLOR_RESET}   $server_name"

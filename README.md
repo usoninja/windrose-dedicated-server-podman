@@ -268,6 +268,18 @@ If your host is slow to start the container after `./windrose update`, increase 
 | `./data`       | `/data`        | Server files, saves, config |
 | `./steam-home` | `/home/steam`  | Wine prefix, SteamCMD cache |
 
+The host directories must be writable by the user IDs configured in `.env`. The
+recommended setup command creates them automatically. For an existing checkout
+or a directory created by another user, repair ownership before starting:
+
+```bash
+mkdir -p data steam-home
+chown -R "$(awk -F= '$1 == "PUID" {print $2}' .env):$(awk -F= '$1 == "PGID" {print $2}' .env)" data steam-home
+```
+
+With rootless Podman, use the host user that runs Podman for `PUID` and `PGID`;
+container root cannot override host filesystem permissions on a bind mount.
+
 ## Multiple worlds
 
 Windrose stores each world under the save database path:
@@ -963,7 +975,15 @@ The first launch needs to download and prepare SteamCMD, Wine runtime files, and
 
 ### Why do I get permission denied errors?
 
-This usually means the mounted host directories are owned by a different user than the container expects. Check `PUID` and `PGID` in your `.env`, then restart the container.
+This means the mounted host directories are not writable by the container's
+configured `PUID` and `PGID`. Stop the service, repair ownership as described in
+[Volumes](#volumes), then recreate the container:
+
+```bash
+podman compose down
+chown -R "$(awk -F= '$1 == "PUID" {print $2}' .env):$(awk -F= '$1 == "PGID" {print $2}' .env)" data steam-home
+podman compose up -d
+```
 
 ### How do I test Discord or Gotify integration?
 

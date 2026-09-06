@@ -67,19 +67,30 @@ ensure_user_mapping() {
   groupmod -o -g "$PGID" steam 2>/dev/null || true
   usermod -o -u "$PUID" steam 2>/dev/null || true
 
-  mkdir -p \
-    "$SERVERDIR" \
-    "$STEAM_HOME" \
-    "$STEAM_HOME/.local/share" \
-    "$STEAM_HOME/.config" \
-    "$STEAM_HOME/.cache" \
-    "$STEAM_HOME/Steam"
+  if ! mkdir -p \
+      "$SERVERDIR" \
+      "$STEAM_HOME" \
+      "$STEAM_HOME/.local/share" \
+      "$STEAM_HOME/.config" \
+      "$STEAM_HOME/.cache" \
+      "$STEAM_HOME/Steam"; then
+    log_error "Cannot initialize mounted directories."
+    log_error "Make $SERVERDIR and $STEAM_HOME writable by PUID=$PUID and PGID=$PGID on the host."
+    exit 1
+  fi
 
   if [ ! -L "$STEAM_HOME/.steam" ]; then
     ln -sf "$STEAM_HOME/Steam" "$STEAM_HOME/.steam" 2>/dev/null || true
   fi
 
   chown -R steam:steam /opt/steamcmd "$STEAM_HOME" "$SERVERDIR" 2>/dev/null || true
+
+  if ! su -s /bin/bash steam -c "test -w $(quote "$STEAM_HOME") && test -w $(quote "$SERVERDIR")"; then
+    log_error "Mounted directories are not writable by steam (PUID=$PUID, PGID=$PGID)."
+    log_error "Fix ownership on the host, then recreate the container. Example:"
+    log_error "  chown -R $PUID:$PGID steam-home data"
+    exit 1
+  fi
 }
 
 dump_wine_diagnostics() {
