@@ -195,6 +195,14 @@ is_utf8_locale() {
   [[ "${active_locale,,}" == *"utf-8"* || "${active_locale,,}" == *"utf8"* ]]
 }
 
+compose_command_available() {
+  local -a compose_command=("$@")
+
+  "${compose_command[@]}" version >/dev/null 2>&1 ||
+    "${compose_command[@]}" --version >/dev/null 2>&1 ||
+    "${compose_command[@]}" --help >/dev/null 2>&1
+}
+
 init_podman_cmd() {
   if [[ -n "$PODMAN_BIN" ]]; then
     read -r -a PODMAN_CMD <<<"$PODMAN_BIN"
@@ -207,7 +215,7 @@ init_podman_cmd() {
 
   if [[ -n "$COMPOSE_BIN" ]]; then
     read -r -a COMPOSE_CMD <<<"$COMPOSE_BIN"
-  elif "${PODMAN_CMD[@]}" compose version >/dev/null 2>&1; then
+  elif compose_command_available "${PODMAN_CMD[@]}" compose; then
     COMPOSE_CMD=("${PODMAN_CMD[@]}" compose)
   elif command -v podman-compose >/dev/null 2>&1; then
     COMPOSE_CMD=(podman-compose)
@@ -1425,14 +1433,14 @@ doctor_server() {
   screen_kv "mode:" "$ACTIVE_MODE"
   screen_section "Preflight"
 
-  if command -v docker >/dev/null 2>&1; then
+  if [[ "${#PODMAN_CMD[@]}" -gt 0 ]]; then
     log_ok "Podman CLI is available"
   else
     log_error "Podman CLI is not available in PATH"
     fail_count=$((fail_count + 1))
   fi
 
-  if "${COMPOSE_CMD[@]}" version >/dev/null 2>&1; then
+  if compose_command_available "${COMPOSE_CMD[@]}"; then
     log_ok "Podman Compose is available"
   else
     log_error "Podman Compose is not available"
@@ -3386,7 +3394,7 @@ run_setup_host_precheck() {
     exit 1
   fi
 
-  if ! "${COMPOSE_CMD[@]}" version >/dev/null 2>&1; then
+  if ! compose_command_available "${COMPOSE_CMD[@]}"; then
     log_step_failed
     log_error "Podman Compose is not available. Install a Podman Compose provider and retry."
     exit 1
