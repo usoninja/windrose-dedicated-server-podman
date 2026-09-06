@@ -365,6 +365,28 @@ is_mutating_command() {
 }
 
 start_server() {
+  local puid pgid
+
+  puid="$(dotenv_value PUID || true)"
+  pgid="$(dotenv_value PGID || true)"
+  puid="${puid:-$(id -u)}"
+  pgid="${pgid:-$(id -g)}"
+
+  log_step "Preparing persistent directories"
+  if ! mkdir -p "$COMPOSE_DIR/data" "$COMPOSE_DIR/steam-home"; then
+    log_step_failed
+    log_error "Cannot create persistent directories in $COMPOSE_DIR."
+    exit 1
+  fi
+  if [[ ! -w "$COMPOSE_DIR/data" || ! -w "$COMPOSE_DIR/steam-home" ]]; then
+    log_step_failed
+    log_error "Persistent directories are not writable by the host user."
+    log_error "Fix ownership for PUID=$puid and PGID=$pgid, then retry:"
+    log_error "  chown -R $puid:$pgid $COMPOSE_DIR/data $COMPOSE_DIR/steam-home"
+    exit 1
+  fi
+  log_step_done
+
   log_step "Starting server ($ACTIVE_MODE mode)"
   if ! dc up -d >/dev/null 2>&1; then
     log_step_failed

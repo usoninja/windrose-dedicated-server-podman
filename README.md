@@ -147,7 +147,7 @@ nano .env
 podman build --pull=missing -t localhost/windrose-ds:stable .
 
 # 5. Start the server (SteamCMD downloads game files on first run ~3 GB)
-podman compose up -d
+./windrose start
 
 # 6. Follow logs
 podman compose logs -f windrose
@@ -274,7 +274,7 @@ or a directory created by another user, repair ownership before starting:
 
 ```bash
 mkdir -p data steam-home
-chown -R "$(awk -F= '$1 == "PUID" {print $2}' .env):$(awk -F= '$1 == "PGID" {print $2}' .env)" data steam-home
+sudo chown -R "$(awk -F= '$1 == "PUID" {print $2}' .env):$(awk -F= '$1 == "PGID" {print $2}' .env)" data steam-home
 ```
 
 With rootless Podman, use the host user that runs Podman for `PUID` and `PGID`;
@@ -980,9 +980,9 @@ configured `PUID` and `PGID`. Stop the service, repair ownership as described in
 [Volumes](#volumes), then recreate the container:
 
 ```bash
-podman compose down
-chown -R "$(awk -F= '$1 == "PUID" {print $2}' .env):$(awk -F= '$1 == "PGID" {print $2}' .env)" data steam-home
-podman compose up -d
+./windrose down
+sudo chown -R "$(awk -F= '$1 == "PUID" {print $2}' .env):$(awk -F= '$1 == "PGID" {print $2}' .env)" data steam-home
+./windrose start
 ```
 
 ### How do I test Discord or Gotify integration?
