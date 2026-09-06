@@ -1,4 +1,4 @@
-name: Build and Publish Docker Image
+name: Validate Release Image Locally
 
 on:
   push:
@@ -12,7 +12,6 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -25,51 +24,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Compute tags
-        id: tags
+      - name: Build release image without publishing
         run: |
-          repo_lc="${GITHUB_REPOSITORY,,}"
-          ghcr_image="ghcr.io/${repo_lc}"
-          dh_image="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${GITHUB_REPOSITORY##*/}"
-          ref_name="${GITHUB_REF_NAME}"
-          tags="${ghcr_image}:${ref_name},${dh_image}:${ref_name}"
-
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            tags="$tags,${ghcr_image}:latest,${dh_image}:latest"
-          fi
-
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: false
-          build-args: |
-            WINE_FLAVOR=stable
-            ENABLE_WINETRICKS=false
-            INSTALL_DEBUG_TOOLS=false
-            DEFAULT_WINEDEBUG=-all
-          tags: ${{ steps.tags.outputs.tags }}
+          set -euo pipefail
+          podman build \
+            --pull=missing \
+            --platform linux/amd64 \
+            --tag "localhost/windrose-ds:${GITHUB_REF_NAME}" \
+            --build-arg WINE_FLAVOR=stable \
+            --build-arg ENABLE_WINETRICKS=false \
+            --build-arg INSTALL_DEBUG_TOOLS=false \
+            --build-arg DEFAULT_WINEDEBUG=-all \
+            .

@@ -120,8 +120,10 @@ BACKUP_SKIP_ONLINE_CHECK="${BACKUP_SKIP_ONLINE_CHECK:-false}"
 COMPOSE_DIR="${COMPOSE_DIR:-$SCRIPT_DIR}"
 SERVICE_NAME="${SERVICE_NAME:-$(dotenv_value SERVICE_NAME || true)}"
 SERVICE_NAME="${SERVICE_NAME:-windrose}"
-DOCKER_BIN="${DOCKER_BIN:-}"
-DOCKER_CMD=()
+PODMAN_BIN="${PODMAN_BIN:-}"
+COMPOSE_BIN="${COMPOSE_BIN:-}"
+PODMAN_CMD=()
+COMPOSE_CMD=()
 
 NOTIFY_PROVIDER="${NOTIFY_PROVIDER:-$(dotenv_value NOTIFY_PROVIDER || true)}"
 NOTIFY_PROVIDER="${NOTIFY_PROVIDER:-auto}"
@@ -156,28 +158,34 @@ run_quiet() {
   "$@" >/dev/null 2>&1
 }
 
-init_docker_cmd() {
-  if [[ -n "$DOCKER_BIN" ]]; then
-    read -r -a DOCKER_CMD <<<"$DOCKER_BIN"
+init_podman_cmd() {
+  if [[ -n "$PODMAN_BIN" ]]; then
+    read -r -a PODMAN_CMD <<<"$PODMAN_BIN"
+  elif command -v podman >/dev/null 2>&1; then
+    PODMAN_CMD=(podman)
+  else
+    PODMAN_CMD=()
     return
   fi
 
-  if docker info >/dev/null 2>&1; then
-    DOCKER_CMD=(docker)
-  elif command -v sudo >/dev/null 2>&1; then
-    DOCKER_CMD=(sudo docker)
+  if [[ -n "$COMPOSE_BIN" ]]; then
+    read -r -a COMPOSE_CMD <<<"$COMPOSE_BIN"
+  elif "${PODMAN_CMD[@]}" compose version >/dev/null 2>&1; then
+    COMPOSE_CMD=("${PODMAN_CMD[@]}" compose)
+  elif command -v podman-compose >/dev/null 2>&1; then
+    COMPOSE_CMD=(podman-compose)
   else
-    DOCKER_CMD=()
+    PODMAN_CMD=()
   fi
 }
 
 dc_backup() {
-  if [[ ${#DOCKER_CMD[@]} -eq 0 ]]; then
+  if [[ ${#COMPOSE_CMD[@]} -eq 0 ]]; then
     return 1
   fi
   (
     cd "$COMPOSE_DIR"
-    "${DOCKER_CMD[@]}" compose "$@"
+    "${COMPOSE_CMD[@]}" "$@"
   )
 }
 
@@ -245,10 +253,10 @@ check_players_online() {
     return 0
   fi
 
-  init_docker_cmd
+  init_podman_cmd
 
-  if [[ ${#DOCKER_CMD[@]} -eq 0 ]]; then
-    log_warn "Docker not available; skipping online player check"
+  if [[ ${#COMPOSE_CMD[@]} -eq 0 ]]; then
+    log_warn "Podman Compose not available; skipping online player check"
     return 0
   fi
 

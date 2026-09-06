@@ -18,8 +18,9 @@ SCRIPT_DIR="$(resolve_script_dir)"
 COMPOSE_DIR="${COMPOSE_DIR:-$SCRIPT_DIR}"
 SERVICE_NAME="${SERVICE_NAME:-windrose}"
 MODE="${WINDROSE_MODE:-auto}"
-DOCKER_BIN="${DOCKER_BIN:-}"
-SELF_NAME="${WINDROSE_CMD_NAME:-$(basename "$0")}"
+PODMAN_BIN="${PODMAN_BIN:-}"
+COMPOSE_BIN="${COMPOSE_BIN:-}"
+SELF_NAME="${WINDROSE_CMD_NAME:-$(basename "$0")}";
 SERVER_DESC_FILE="$SCRIPT_DIR/data/R5/ServerDescription.json"
 APP_MANIFEST_FILE="$SCRIPT_DIR/data/steamapps/appmanifest_4129620.acf"
 ROCKSDB_V2_DIR="$SCRIPT_DIR/data/R5/Saved/SaveProfiles/Default/RocksDB_v2"
@@ -30,7 +31,8 @@ UPDATE_LOG_DIR="$SCRIPT_DIR/logs"
 UPDATE_LOG_FILE="$UPDATE_LOG_DIR/update.log"
 MUTATION_LOCK_DIR="$SCRIPT_DIR/logs/.windrose-mutation-lock"
 MUTATION_LOCK_META="$MUTATION_LOCK_DIR/meta"
-DOCKER_CMD=()
+PODMAN_CMD=()
+COMPOSE_CMD=()
 MUTATION_LOCK_HELD="false"
 
 # ANSI color policy: disable colors when NO_COLOR is set or stdout is not a TTY.
@@ -193,24 +195,25 @@ is_utf8_locale() {
   [[ "${active_locale,,}" == *"utf-8"* || "${active_locale,,}" == *"utf8"* ]]
 }
 
-init_docker_cmd() {
-  if ! command -v docker >/dev/null 2>&1; then
-    log_error "[FAIL] docker is not installed or not in PATH."
+init_podman_cmd() {
+  if [[ -n "$PODMAN_BIN" ]]; then
+    read -r -a PODMAN_CMD <<<"$PODMAN_BIN"
+  elif command -v podman >/dev/null 2>&1; then
+    PODMAN_CMD=(podman)
+  else
+    log_error "[FAIL] podman is not installed or not in PATH."
     exit 1
   fi
 
-  if [[ -n "$DOCKER_BIN" ]]; then
-    read -r -a DOCKER_CMD <<<"$DOCKER_BIN"
-    return
-  fi
-
-  if docker info >/dev/null 2>&1; then
-    DOCKER_CMD=(docker)
-  elif command -v sudo >/dev/null 2>&1; then
-    DOCKER_CMD=(sudo docker)
+  if [[ -n "$COMPOSE_BIN" ]]; then
+    read -r -a COMPOSE_CMD <<<"$COMPOSE_BIN"
+  elif "${PODMAN_CMD[@]}" compose version >/dev/null 2>&1; then
+    COMPOSE_CMD=("${PODMAN_CMD[@]}" compose)
+  elif command -v podman-compose >/dev/null 2>&1; then
+    COMPOSE_CMD=(podman-compose)
   else
-    log_error "[FAIL] docker needs elevated permissions and sudo is not available."
-    log_info "Next step: run with DOCKER_BIN='sudo docker' ./$SELF_NAME status"
+    log_error "[FAIL] no Podman Compose provider is available."
+    log_info "Install 'podman compose' support or podman-compose, then retry."
     exit 1
   fi
 }
@@ -254,7 +257,7 @@ fi
 dc() {
   (
     cd "$COMPOSE_DIR"
-    "${DOCKER_CMD[@]}" compose "${COMPOSE_FILES[@]}" "$@"
+    "${COMPOSE_CMD[@]}" "${COMPOSE_FILES[@]}" "$@"
   )
 }
 
@@ -300,7 +303,7 @@ Sections:
 Notes:
   - compose directory: $COMPOSE_DIR
   - detected mode: $ACTIVE_MODE
-  - docker permissions are auto-detected; set DOCKER_BIN manually only if needed
+  - Podman is required; set PODMAN_BIN or COMPOSE_BIN only if needed
   - set WINDROSE_MODE=prod or WINDROSE_MODE=dev to override auto detection
   - backup archives default to ./backups with 7-day retention
   - legacy aliases kept: player-history, player-events, test-notify
@@ -1121,7 +1124,7 @@ status_server() {
     compose_name="$(printf '%s' "$compose_line" | awk -F'|' '{print $4}')"
   fi
 
-  health="$("${DOCKER_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
+  health="$("${PODMAN_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
   health="${health//$'\n'/}"
   health="${health:-unknown}"
 
@@ -1269,7 +1272,7 @@ status_json() {
     running="false"
   fi
 
-  health="$("${DOCKER_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
+  health="$("${PODMAN_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
   health="${health//$'\n'/}"
   if [[ -z "$health" ]]; then
     health="not-found"
@@ -1340,7 +1343,7 @@ status_snapshot() {
     running="no"
   fi
 
-  health="$("${DOCKER_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
+  health="$("${PODMAN_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
   health="${health//$'\n'/}"
   health="${health:-unknown}"
 
@@ -1423,16 +1426,16 @@ doctor_server() {
   screen_section "Preflight"
 
   if command -v docker >/dev/null 2>&1; then
-    log_ok "Docker CLI is available"
+    log_ok "Podman CLI is available"
   else
-    log_error "Docker CLI is not available in PATH"
+    log_error "Podman CLI is not available in PATH"
     fail_count=$((fail_count + 1))
   fi
 
-  if "${DOCKER_CMD[@]}" compose version >/dev/null 2>&1; then
-    log_ok "Docker Compose v2 is available"
+  if "${COMPOSE_CMD[@]}" version >/dev/null 2>&1; then
+    log_ok "Podman Compose is available"
   else
-    log_error "Docker Compose v2 is not available"
+    log_error "Podman Compose is not available"
     fail_count=$((fail_count + 1))
   fi
 
@@ -1497,7 +1500,7 @@ doctor_server() {
 
   if server_is_running; then
     log_ok "Service is running: $SERVICE_NAME"
-    health="$("${DOCKER_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
+    health="$("${PODMAN_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
     health="${health//$'\n'/}"
     if [[ -z "$health" || "$health" == "not-found" ]]; then
       log_warn "Container health could not be determined for $container_name"
@@ -3014,11 +3017,15 @@ install_backup_cron() {
   echo "$cron_line"
 }
 
-pull_image() {
-  log_step "Pulling image defined in compose"
-  if ! dc pull; then
+ensure_local_image() {
+  local image_name
+  image_name="$(dotenv_value IMAGE_NAME || true)"
+  image_name="${image_name:-localhost/windrose-ds:stable}"
+
+  log_step "Checking local image $image_name"
+  if ! "${PODMAN_CMD[@]}" image exists "$image_name"; then
     log_step_failed
-    log_error "Failed to pull image defined in compose."
+    log_error "Local image '$image_name' was not found. Build it with: podman build -t $image_name ."
     exit 1
   fi
   log_step_done
@@ -3065,7 +3072,7 @@ verify_update_runtime() {
 
   for _ in $(seq 1 "$timeout"); do
     if server_is_running; then
-      health="$("${DOCKER_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
+      health="$("${PODMAN_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
       health="${health//$'\n'/}"
 
       if [[ "$health" == "healthy" || "$health" == "none" ]]; then
@@ -3141,7 +3148,7 @@ diagnostics_bundle() {
 
   container_name="$(dotenv_value CONTAINER_NAME || true)"
   container_name="${container_name:-$SERVICE_NAME}"
-  "${DOCKER_CMD[@]}" inspect "$container_name" >"$tmp_dir/container-inspect.json" 2>/dev/null || true
+  "${PODMAN_CMD[@]}" inspect "$container_name" >"$tmp_dir/container-inspect.json" 2>/dev/null || true
 
   if ! tar -czf "$out_file" -C "$tmp_dir" . >/dev/null 2>&1; then
     log_step_failed
@@ -3192,7 +3199,7 @@ _update_fail() {
   if server_is_running; then
     running="yes"
   fi
-  health="$("${DOCKER_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
+  health="$("${PODMAN_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null || true)"
   health="${health//$'\n'/}"
   health="${health:-unknown}"
   _print_update_summary "failed" "$old_ref" "$new_ref" "$duration" "$running" "$health"
@@ -3210,7 +3217,7 @@ update_server() {
   local _upd_container_name
   _upd_container_name="$(dotenv_value CONTAINER_NAME 2>/dev/null || true)"
   _upd_container_name="${_upd_container_name:-$SERVICE_NAME}"
-  old_image_ref="$("${DOCKER_CMD[@]}" inspect "$_upd_container_name" --format '{{.Config.Image}}' 2>/dev/null || true)"
+  old_image_ref="$("${PODMAN_CMD[@]}" inspect "$_upd_container_name" --format '{{.Config.Image}}' 2>/dev/null || true)"
 
   if [[ -n "$mode" && "$mode" != "--force-down" ]]; then
     log_error "Invalid update option '$mode'. Supported: --force-down"
@@ -3243,7 +3250,7 @@ update_server() {
   render_progress_bar 0
 
   if [[ "$mode" == "--force-down" ]]; then
-    append_update_log "Running (force-down): docker compose down"
+    append_update_log "Running (force-down): podman compose down"
     if ! dc down >>"$UPDATE_LOG_FILE" 2>&1; then
       printf '\n'
       log_error "Failed to stop and remove the stack before update. See $UPDATE_LOG_FILE"
@@ -3251,37 +3258,37 @@ update_server() {
     fi
     render_progress_bar 33
 
-    append_update_log "Running (force-down): docker compose pull"
-    if ! dc pull >>"$UPDATE_LOG_FILE" 2>&1; then
+    append_update_log "Running (force-down): local image check"
+    if ! ensure_local_image >>"$UPDATE_LOG_FILE" 2>&1; then
       printf '\n'
-      log_error "Failed to pull the selected image tag. See $UPDATE_LOG_FILE"
+      log_error "Local image is missing. See $UPDATE_LOG_FILE"
       _update_fail "$old_image_ref" "$new_image_ref" "$update_start_ts"
     fi
     render_progress_bar 66
 
-    append_update_log "Running (force-down): docker compose up -d"
+    append_update_log "Running (force-down): podman compose up -d"
     if ! dc up -d >>"$UPDATE_LOG_FILE" 2>&1; then
       printf '\n'
       log_error "Failed to recreate the container after update. See $UPDATE_LOG_FILE"
       _update_fail "$old_image_ref" "$new_image_ref" "$update_start_ts"
     fi
-    new_image_ref="$("${DOCKER_CMD[@]}" inspect "$_upd_container_name" --format '{{.Config.Image}}' 2>/dev/null || true)"
+    new_image_ref="$("${PODMAN_CMD[@]}" inspect "$_upd_container_name" --format '{{.Config.Image}}' 2>/dev/null || true)"
   else
-    append_update_log "Running (safe): docker compose pull"
-    if ! dc pull >>"$UPDATE_LOG_FILE" 2>&1; then
+    append_update_log "Running (safe): local image check"
+    if ! ensure_local_image >>"$UPDATE_LOG_FILE" 2>&1; then
       printf '\n'
-      log_error "Failed to pull the selected image tag. Existing container was left untouched. See $UPDATE_LOG_FILE"
+      log_error "Local image is missing. Existing container was left untouched. See $UPDATE_LOG_FILE"
       _update_fail "$old_image_ref" "$new_image_ref" "$update_start_ts"
     fi
     render_progress_bar 50
 
-    append_update_log "Running (safe): docker compose up -d"
+    append_update_log "Running (safe): podman compose up -d"
     if ! dc up -d >>"$UPDATE_LOG_FILE" 2>&1; then
       printf '\n'
       log_error "Failed to recreate the container after update. See $UPDATE_LOG_FILE"
       _update_fail "$old_image_ref" "$new_image_ref" "$update_start_ts"
     fi
-    new_image_ref="$("${DOCKER_CMD[@]}" inspect "$_upd_container_name" --format '{{.Config.Image}}' 2>/dev/null || true)"
+    new_image_ref="$("${PODMAN_CMD[@]}" inspect "$_upd_container_name" --format '{{.Config.Image}}' 2>/dev/null || true)"
   fi
 
   if ! verify_update_runtime; then
@@ -3298,7 +3305,7 @@ update_server() {
   if server_is_running; then
     post_running="yes"
   fi
-  post_health="$("${DOCKER_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$_upd_container_name" 2>/dev/null || true)"
+  post_health="$("${PODMAN_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$_upd_container_name" 2>/dev/null || true)"
   post_health="${post_health//$'\n'/}"
   post_health="${post_health:-unknown}"
   _print_update_summary "ok" "$old_image_ref" "$new_image_ref" "$duration" "$post_running" "$post_health"
@@ -3371,17 +3378,17 @@ run_setup_host_precheck() {
   local free_disk_mb=0
   local disk_mount="unknown"
 
-  log_step "Running host precheck (docker/compose/resources)"
+  log_step "Running host precheck (podman/compose/resources)"
 
-  if ! command -v docker >/dev/null 2>&1; then
+  if ! command -v podman >/dev/null 2>&1; then
     log_step_failed
-    log_error "Docker is not installed or not in PATH. Install Docker 24+ and retry."
+    log_error "Podman is not installed or not in PATH. Install Podman and retry."
     exit 1
   fi
 
-  if ! "${DOCKER_CMD[@]}" compose version >/dev/null 2>&1; then
+  if ! "${COMPOSE_CMD[@]}" version >/dev/null 2>&1; then
     log_step_failed
-    log_error "Docker Compose v2 is not available. Install the docker compose plugin and retry."
+    log_error "Podman Compose is not available. Install a Podman Compose provider and retry."
     exit 1
   fi
 
@@ -3589,7 +3596,7 @@ setup_server() {
     log_step "Running startup preflight checks"
     if ! dc config -q >/dev/null 2>&1; then
       log_step_failed
-      log_error "Docker Compose configuration is invalid. Fix compose/.env values and retry."
+      log_error "Podman Compose configuration is invalid. Fix compose/.env values and retry."
       exit 1
     fi
     log_step_done
@@ -3604,13 +3611,12 @@ setup_server() {
 
     log_info "If LAN clients fail to connect while WAN works, see README: 'Troubleshooting -> LAN clients fail, WAN clients work'."
 
-    log_step "Pulling image"
-    if ! dc pull; then
+    log_step "Checking local image"
+    if ! ensure_local_image; then
       log_step_failed
-      log_error "Failed to pull image. Check IMAGE_TAG in $env_file and try again."
+      log_error "Local image is unavailable. Build the configured IMAGE_NAME before starting."
       exit 1
     fi
-    log_step_done
 
     log_step "Starting server"
     if ! dc up -d >/dev/null 2>&1; then
@@ -3689,7 +3695,7 @@ EOF
   log_ok "Installed launcher at $target"
 }
 
-init_docker_cmd
+init_podman_cmd
 require_tools
 
 trap release_mutation_lock EXIT
@@ -3770,7 +3776,7 @@ install-backup-cron)
   install_backup_cron "${2:-}"
   ;;
 pull)
-  pull_image
+  ensure_local_image
   ;;
 update)
   update_server "${2:-}"

@@ -5,8 +5,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/.env}"
 SERVICE_NAME="${SERVICE_NAME:-windrose}"
 SELF_NAME="${WINDROSE_CMD_NAME:-$(basename "$0")}"
-DOCKER_BIN="${DOCKER_BIN:-}"
-DOCKER_CMD=()
+PODMAN_BIN="${PODMAN_BIN:-}"
+COMPOSE_BIN="${COMPOSE_BIN:-}"
+PODMAN_CMD=()
+COMPOSE_CMD=()
 
 NOTIFY_PROVIDER="${NOTIFY_PROVIDER:-auto}"
 DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
@@ -168,18 +170,23 @@ Environment (behavior):
 EOF
 }
 
-init_docker_cmd() {
-  if [[ -n "$DOCKER_BIN" ]]; then
-    read -r -a DOCKER_CMD <<<"$DOCKER_BIN"
-    return
+init_podman_cmd() {
+  if [[ -n "$PODMAN_BIN" ]]; then
+    read -r -a PODMAN_CMD <<<"$PODMAN_BIN"
+  elif command -v podman >/dev/null 2>&1; then
+    PODMAN_CMD=(podman)
+  else
+    fatal_exit "podman is not available" "Install Podman and a Compose provider, then retry."
   fi
 
-  if docker info >/dev/null 2>&1; then
-    DOCKER_CMD=(docker)
-  elif command -v sudo >/dev/null 2>&1; then
-    DOCKER_CMD=(sudo docker)
+  if [[ -n "$COMPOSE_BIN" ]]; then
+    read -r -a COMPOSE_CMD <<<"$COMPOSE_BIN"
+  elif "${PODMAN_CMD[@]}" compose version >/dev/null 2>&1; then
+    COMPOSE_CMD=("${PODMAN_CMD[@]}" compose)
+  elif command -v podman-compose >/dev/null 2>&1; then
+    COMPOSE_CMD=(podman-compose)
   else
-    fatal_exit "docker is not available" "Install Docker or set DOCKER_BIN (for example: DOCKER_BIN='sudo docker' ./$SELF_NAME)."
+    fatal_exit "Podman Compose is not available" "Install a Podman Compose provider and retry."
   fi
 }
 
@@ -543,13 +550,13 @@ main() {
     exit $?
   fi
 
-  init_docker_cmd
+  init_podman_cmd
   load_identity_map
 
   # Start watching from "now" to avoid replaying historical joins/leaves.
   watch_since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   log_info "Watching $SERVICE_NAME logs since $watch_since for player activity via $(resolve_provider)..."
-  "${DOCKER_CMD[@]}" compose -f "$SCRIPT_DIR/docker-compose.yml" logs --since="$watch_since" --tail="$NOTIFY_TAIL_LINES" -f "$SERVICE_NAME" | while IFS= read -r line; do
+  "${COMPOSE_CMD[@]}" -f "$SCRIPT_DIR/docker-compose.yml" logs --since="$watch_since" --tail="$NOTIFY_TAIL_LINES" -f "$SERVICE_NAME" | while IFS= read -r line; do
     parse_line "$line"
   done
 }

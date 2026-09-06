@@ -1,28 +1,33 @@
 .PHONY: up down restart logs build status backup update
 
+PODMAN ?= podman
+COMPOSE ?= $(PODMAN) compose
+IMAGE_NAME ?= localhost/windrose-ds:stable
+
 # Start the server (build image if needed)
 up:
-	docker compose up -d --build
+	$(MAKE) build
+	IMAGE_NAME=$(IMAGE_NAME) $(COMPOSE) up -d
 
 # Stop the server gracefully
 down:
-	docker compose stop
+	$(COMPOSE) stop
 
 # Restart the server
 restart:
-	docker compose down && docker compose up -d
+	$(COMPOSE) down && IMAGE_NAME=$(IMAGE_NAME) $(COMPOSE) up -d
 
 # Follow live logs
 logs:
-	docker compose logs -f windrose
+	$(COMPOSE) logs -f windrose
 
 # Build image only
 build:
-	docker compose build
+	$(PODMAN) build --pull=missing -t $(IMAGE_NAME) .
 
 # Container status + health
 status:
-	docker compose ps
+	$(COMPOSE) ps
 
 # Manual backup of saves
 backup:
@@ -31,13 +36,13 @@ backup:
 
 # Force game update (stops, re-downloads, starts)
 update:
-	docker compose stop
-	docker compose run --rm windrose /opt/steamcmd/steamcmd.sh \
+	$(COMPOSE) stop
+	$(COMPOSE) run --rm windrose /opt/steamcmd/steamcmd.sh \
 		+force_install_dir /data \
 		+login anonymous \
 		+app_update 4129620 validate \
 		+quit
-	docker compose up -d
+	IMAGE_NAME=$(IMAGE_NAME) $(COMPOSE) up -d
 
 # Show server invite code
 invite:

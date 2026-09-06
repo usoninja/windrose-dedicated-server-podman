@@ -30,7 +30,7 @@ Use these commands for a fast operational check:
 ./windrose worlds-check
 
 # 4) Recent critical network/auth errors from current log file
-docker compose logs --no-color --tail 400 windrose | grep -Ei "account verification failed|turn session was expired|p2pgate disconnected|server authorization failed|login finished with error"
+podman compose logs --no-color --tail 400 windrose | grep -Ei "account verification failed|turn session was expired|p2pgate disconnected|server authorization failed|login finished with error"
 
 # 5) Create diagnostics bundle for incident review
 ./windrose diagnostics
@@ -233,7 +233,7 @@ Typical symptoms:
    sudo netfilter-persistent save
    ```
 
-> ⚠ **Caveat:** Container IP can change when the container is recreated. After `docker compose up`, verify the IP with `docker inspect` and update the iptables rule if needed.
+> ⚠ **Caveat:** Container IP can change when the container is recreated. After `podman compose up`, verify the IP with `podman inspect` and update the iptables rule if needed.
 
 ### Fix — Part 2: add a route on the LAN client
 
@@ -262,7 +262,7 @@ sudo route add -net 172.17.0.0/16 <server_host_lan_ip>
 After applying both parts, check server logs for successful ICE consent:
 
 ```bash
-docker compose logs windrose | grep -i "Nominated\|Consented\|Succeeded"
+podman compose logs windrose | grep -i "Nominated\|Consented\|Succeeded"
 ```
 
 Expected: `Nominated pair Succeeded` and `CheckConsent ... Consented pair ... Succeeded`.

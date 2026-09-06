@@ -23,8 +23,8 @@ When writing GitHub release notes for a tag:
 
 Before creating or publishing a new tag:
 
-- Update `IMAGE_TAG` in `.env.example` to the new version.
-- Update all stable tag references in `README.md` to the new version (quick start image example, `IMAGE_TAG` default value in config table, `IMAGE_TAG` in the quick start code block, update/stable guidance lines).
+- Keep the local `IMAGE_NAME` value in `.env.example` and `README.md` consistent.
+- Do not add or restore remote image tags, registry login steps, image pulls, or image pushes.
 - Update `brokol/docker.md` while preparing release notes so the Docker Hub description source stays current.
 - Validate that old stable version references are gone from `.env.example` and `README.md`.
 - Confirm the release notes include an updated wrapper deprecation status entry when the wrappers still exist or their status has changed.

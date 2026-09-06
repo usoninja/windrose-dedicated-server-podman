@@ -4,7 +4,7 @@ services:
       context: .
       args:
         WINE_FLAVOR: stable
-    image: windrose-ds:dev
+    image: ${IMAGE_NAME:-localhost/windrose-ds:dev}
     pull_policy: never
     environment:
       UPDATE_ON_START: ${UPDATE_ON_START:-false}

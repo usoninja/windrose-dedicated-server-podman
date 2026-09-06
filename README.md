@@ -1,11 +1,12 @@
-# Windrose Dedicated Server — Docker
+# Windrose Dedicated Server — Podman
 
 ![GitHub Stars](https://img.shields.io/github/stars/UberDudePL/windrose-dedicated-server-docker)
 ![License](https://img.shields.io/github/license/UberDudePL/windrose-dedicated-server-docker)
 ![Version](https://img.shields.io/github/v/release/UberDudePL/windrose-dedicated-server-docker)
-![Docker Pulls](https://img.shields.io/docker/pulls/uberdudepl/windrose-dedicated-server-docker)
 
-Windrose dedicated server for Linux using Docker, SteamCMD and Wine, with persistent saves, backups, diagnostics and optional Discord/Gotify notifications.
+Windrose dedicated server for Linux using Podman, SteamCMD and Wine, with persistent saves, backups, diagnostics and optional Discord/Gotify notifications.
+
+Images are built and stored locally. This repository does not pull from or push to Docker Hub, GHCR, or another container registry.
 
 Self-hosted and production-friendly setup with first-time setup helper, world switching, health checks and 24/7 operation support.
 
@@ -47,7 +48,7 @@ Additional documents:
 
 ## Features
 
-- Dockerized Windrose dedicated server on Linux (Wine + Xvfb, headless)
+- Podmanized Windrose dedicated server on Linux (Wine + Xvfb, headless)
 - Automatic game install/update via SteamCMD with optional `UPDATE_ON_START` toggle
 - Persistent data by default (`./data`, `./steam-home`) for saves, config, and Steam/Wine state
 - Simple operator-first configuration through `.env` and optional JSON auto-patching
@@ -55,7 +56,7 @@ Additional documents:
 - Save transfer workflow with explicit `WorldIslandId` mapping and versioned world paths
 - Built-in backup tooling (`./windrose backup`, cron installer, retention controls)
 - Optional Discord/Gotify activity notifications (or both at once) plus notifier test command
-- Multiple image channels (`stable`, `latest`, `staging`, `debug`) for operations and troubleshooting
+- Multiple local image channels (`stable`, `staging`, `debug`) for operations and troubleshooting
 - Production-friendly defaults: host networking, restart policy, healthcheck, and log rotation
 
 ---
@@ -65,8 +66,8 @@ Additional documents:
 | Component      | Minimum                                                   |
 | -------------- | --------------------------------------------------------- |
 | OS             | Ubuntu 22.04+ / Debian 12+ (Linux host)                   |
-| Docker         | 24.x+                                                     |
-| Docker Compose | v2.x (`docker compose`)                                   |
+| Podman         | Current distribution version                               |
+| Podman Compose | `podman compose` or `podman-compose`                      |
 | RAM            | 8 GB (2 players) · 12 GB (4 players) · 16 GB (10 players) |
 | Disk           | 35 GB SSD                                                 |
 
@@ -109,11 +110,11 @@ When setup does not start the server, check the generated code later in `data/R5
 Behavior and safety notes:
 
 - Setup is one-off by design: if `.env` already exists, setup exits with a clear message.
-- Setup runs a host precheck before questions: Docker in PATH, Docker Compose v2, RAM >= 8 GB, free disk >= 8 GB.
+- Setup runs a host precheck before questions: Podman, a Podman Compose provider, RAM >= 8 GB, and free disk >= 8 GB.
 - `PUID` and `PGID` are auto-detected from the current host user.
 - If backup upload is enabled and scope is `full`, scope is adjusted to `both`.
 - If `crontab` is missing, setup continues and warns instead of failing.
-- Before auto-start, setup runs preflight checks (`docker compose config`) and warns if `PORT` or `QUERYPORT` are already in use.
+- Before auto-start, setup runs preflight checks (`podman compose config`) and warns if `PORT` or `QUERYPORT` are already in use.
 
 After setup, use:
 
@@ -126,7 +127,7 @@ After setup, use:
 
 ## Quick start
 
-Production mode uses the published GHCR image by default. Most users only need this mode and can ignore the development override file.
+The default mode builds and runs a local Podman image. No registry login or image pull is required.
 
 If this is your first run, prefer [First-time setup (recommended)](#first-time-setup-recommended).
 
@@ -141,35 +142,33 @@ cp .env.example .env
 # 3. Edit basic values if needed
 nano .env
 
-# 4. Pull the published image
-docker compose pull
+# 4. Build the local image
+podman build --pull=missing -t localhost/windrose-ds:stable .
 
-# 5. Start the server (downloads game files on first run ~3 GB)
-docker compose up -d
+# 5. Start the server (SteamCMD downloads game files on first run ~3 GB)
+podman compose up -d
 
 # 6. Follow logs
-docker compose logs -f windrose
+podman compose logs -f windrose
 ```
 
-Recommended image tags:
+Recommended local image tags:
 
 ```text
-Stable: ghcr.io/uberdudepl/windrose-dedicated-server-docker:v1.6.4
-Latest: ghcr.io/uberdudepl/windrose-dedicated-server-docker:latest
-Staging fallback: ghcr.io/uberdudepl/windrose-dedicated-server-docker:staging
-Debug tools: ghcr.io/uberdudepl/windrose-dedicated-server-docker:debug
+Stable: localhost/windrose-ds:stable
+Staging: localhost/windrose-ds:staging
+Debug: localhost/windrose-ds:debug
 ```
 
-Set the image version in `.env` with:
+Set the local image in `.env` with:
 
 ```dotenv
-IMAGE_REPOSITORY=ghcr.io/uberdudepl/windrose-dedicated-server-docker
-IMAGE_TAG=v1.6.4
+IMAGE_NAME=localhost/windrose-ds:stable
 ```
 
 ### Image variants
 
-- `latest` / version tags: stable Wine build for normal use.
+- `stable`: stable Wine build for normal use.
 - `staging`: fallback image using Wine Staging plus `winetricks` prewarm (`win10`, `vcrun2022`) for host-specific Wine issues.
 - `debug`: stable Wine build plus extra diagnostic tools (`dnsutils`, `file`, `iproute2`, `lsof`, `strace`) and more verbose Wine logging.
 
@@ -236,8 +235,9 @@ If your host is slow to start the container after `./windrose update`, increase 
 | --------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `CONTAINER_NAME`                  | `windrose`  | Change only if you run more than one server on the same host                                                               |
 | `HOSTNAME`                        | `localhost` | Internal container hostname used by ICE candidate discovery; keep `localhost` unless custom name resolves inside container |
-| `IMAGE_REPOSITORY`                | GHCR repo   | Published image repository                                                                                                 |
-| `IMAGE_TAG`                       | `v1.6.4`    | Stable image tag to run                                                                                                    |
+| `IMAGE_NAME`                      | `localhost/windrose-ds:stable` | Local Podman image to run; it is never pulled automatically                                                               |
+| `PODMAN_BIN`                      | empty       | Optional Podman command override, for example `podman`                                                                    |
+| `COMPOSE_BIN`                     | empty       | Optional Compose provider override, for example `podman compose`                                                          |
 | `PUID`                            | `1000`      | User id used for mounted files                                                                                             |
 | `PGID`                            | `1000`      | Group id used for mounted files                                                                                            |
 | `UPDATE_ON_START`                 | `true`      | Update and validate server files on startup                                                                                |
@@ -502,10 +502,10 @@ Official references:
 ./windrose setup
 
 # Start
-docker compose up -d
+podman compose up -d
 
 # Stop
-docker compose stop
+podman compose stop
 
 # Restart helper flow
 ./windrose restart
@@ -523,7 +523,7 @@ docker compose stop
 ./windrose diagnostics
 
 # View live logs
-docker compose logs -f windrose
+podman compose logs -f windrose
 
 # Helper log shortcut
 ./windrose logs
@@ -565,10 +565,10 @@ docker compose logs -f windrose
 ./windrose down
 
 # Check server process inside container
-docker compose exec windrose pgrep -a WindroseServer
+podman compose exec windrose pgrep -a WindroseServer
 
 # Container status + health
-docker compose ps
+podman compose ps
 
 # Optional system-wide install target
 ./windrose install /usr/local/bin/windrosectl
@@ -589,7 +589,7 @@ Use these commands for a fast operational check:
 ./windrose worlds-check
 
 # 4) Recent critical network/auth errors from current log file
-docker compose logs --no-color --tail 400 windrose | grep -Ei "account verification failed|turn session was expired|p2pgate disconnected|server authorization failed|login finished with error"
+podman compose logs --no-color --tail 400 windrose | grep -Ei "account verification failed|turn session was expired|p2pgate disconnected|server authorization failed|login finished with error"
 
 # 5) Create diagnostics bundle for incident review
 ./windrose diagnostics
@@ -918,23 +918,25 @@ Using `host` CPU type passes the physical CPU's full instruction set through to 
 
 ## Image versions
 
-- Most users should keep `IMAGE_TAG=v1.6.4` for a stable server.
-- Use `latest` only for testing.
-- Use `staging` only as a fallback for Wine compatibility issues on a specific host.
-- Use `debug` when you need extra troubleshooting tools inside the image.
-- To upgrade later, change `IMAGE_TAG` in `.env`, then run:
+- Most users should keep `IMAGE_NAME=localhost/windrose-ds:stable` for a stable server.
+- Use the local `staging` image only as a fallback for Wine compatibility issues on a specific host.
+- Use the local `debug` image when you need extra troubleshooting tools inside the image.
+- To upgrade later, rebuild the local image, then restart the service:
 
 ```bash
-docker compose pull
-docker compose up -d
+podman build --pull=missing -t localhost/windrose-ds:stable .
+podman compose up -d
 ```
+
+The repository never pulls or pushes the built Windrose application image. A build may pull the `ubuntu:22.04` base image when missing, and SteamCMD may download game files.
+Builds use `--pull=missing`, so Podman may download the `ubuntu:22.04` base image when it is not already present. The resulting Windrose image remains local and is never pushed automatically.
 
 ---
 
 ## Technical notes
 
 - Supports configurable `PUID` and `PGID` to align mounted volumes with the host
-- `network_mode: host` — no Docker NAT, direct network access
+- `network_mode: host` — no container NAT, direct network access
 - Xvfb provides a headless X display required by Wine
 - `stop_grace_period: 90s` — allows the server to save before shutdown
 - Optional env-based patching can update `ServerDescription.json` automatically
@@ -1089,13 +1091,13 @@ If you need to roll back this script layout migration, use this short procedure:
 
    ```bash
    git checkout <known-good-tag-or-commit>
-   docker compose build --no-cache windrose
+   podman build --pull=missing --no-cache -t localhost/windrose-ds:stable .
    ```
 
 2. Recreate the service:
 
    ```bash
-   docker compose up -d windrose
+   podman compose up -d windrose
    ```
 
 3. Verify health and status:
@@ -1107,14 +1109,12 @@ If you need to roll back this script layout migration, use this short procedure:
 
 This rollback does not require data migration and keeps existing save paths unchanged (`./data`, `./steam-home`).
 
-## Release checklist
+## Local build checklist
 
-1. Pick the new stable version (example: `v1.6.0`).
-2. Update version bump points before tagging:
-   - `.env.example`: set `IMAGE_TAG=v1.6.0`
-   - `README.md`: update all stable version references (`IMAGE_TAG` default examples, quick start snippets, stable guidance lines)
-3. Verify old stable version references are gone from `.env.example` and `README.md`.
-4. Verify behavior locally before publishing:
+1. Build the local stable image:
+   - `.env.example`: set `IMAGE_NAME=localhost/windrose-ds:stable`
+   - `README.md`: keep the local image name consistent with `.env.example`
+2. Verify behavior locally without publishing:
 
    ```bash
    bash -n serverctl.sh backup.sh notify.sh

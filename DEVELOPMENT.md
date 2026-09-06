@@ -1,6 +1,6 @@
 # Windrose Dedicated Server — Development
 
-This document covers local development, image builds, and CI workflows. For production setup and daily operations, see [README.md](README.md).
+This document covers local Podman development, image builds, and CI workflows. For production setup and daily operations, see [README.md](README.md).
 
 ## Table of contents
 
@@ -19,53 +19,54 @@ Most users can skip this section. Use the dev override only when you want to tes
 
 ```bash
 # Build locally and start with the dev override
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+podman build --pull=missing -t localhost/windrose-ds:dev .
+podman compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 # Restart after editing scripts/entrypoint.sh or scripts/healthcheck.sh
-docker compose -f docker-compose.yml -f docker-compose.dev.yml restart windrose
+podman compose -f docker-compose.yml -f docker-compose.dev.yml restart windrose
 
 # Stop the dev stack
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+podman compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
-The default [docker-compose.yml](docker-compose.yml) is for stable published images, while [docker-compose.dev.yml](docker-compose.dev.yml) is for local development.
+Both Compose files use local images. The dev override mounts local scripts for development and never pulls an image.
 
 ---
 
 ## Fast local test
 
-Use this flow when you want to test local changes immediately without committing and without pulling a new image from GHCR:
+Use this flow when you want to test local changes immediately without committing or contacting an image registry:
 
 ```bash
 # 1) Build local image from current working tree
-docker compose -f docker-compose.yml -f docker-compose.dev.yml build windrose
+podman build --pull=missing -t localhost/windrose-ds:dev .
 
 # 2) Start with the locally built image
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d windrose
+podman compose -f docker-compose.yml -f docker-compose.dev.yml up -d windrose
 
 # 3) Watch startup logs
-docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f windrose
+podman compose -f docker-compose.yml -f docker-compose.dev.yml logs -f windrose
 ```
 
 Notes:
 
-- `docker-compose.dev.yml` sets `image: windrose-ds:dev` and `pull_policy: never`, so Compose uses your local build.
+- `docker-compose.dev.yml` sets a `localhost/windrose-ds:dev` image and `pull_policy: never`, so Compose uses your local build.
 - This keeps existing mounted data (`./data`, `./steam-home`) and does not require any Git push/tag workflow.
 - Canonical runtime scripts are mounted from `./scripts` to `/opt/windrose/scripts`.
 - Root `entrypoint.sh` and `healthcheck.sh` are compatibility wrappers and are not the canonical runtime implementation.
 - If you only changed files in `./scripts`, a rebuild is not required. Use:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml restart windrose
+podman compose -f docker-compose.yml -f docker-compose.dev.yml restart windrose
 ```
 
 ---
 
 ## Developer image channels
 
-These channels are published automatically from the `main` branch.
+These channels are built automatically from the `main` branch but remain local to the CI runner.
 
-- `dev`, `dev-staging`, `dev-debug`: automatically published developer channels from the `main` branch.
+- `dev`, `dev-staging`, `dev-debug`: build-only validation channels from the `main` branch.
 
 ---
 
@@ -75,7 +76,7 @@ Use these commands when you want to verify all image variants locally before pus
 
 ```bash
 # stable
-docker build \
+podman build \
    --build-arg WINE_FLAVOR=stable \
    --build-arg ENABLE_WINETRICKS=false \
    --build-arg INSTALL_DEBUG_TOOLS=false \
@@ -83,7 +84,7 @@ docker build \
    -t windrose-smoke:stable .
 
 # staging
-docker build \
+podman build \
    --build-arg WINE_FLAVOR=staging \
    --build-arg ENABLE_WINETRICKS=true \
    --build-arg WINETRICKS_PACKAGES='win10 vcrun2022' \
@@ -92,7 +93,7 @@ docker build \
    -t windrose-smoke:staging .
 
 # debug
-docker build \
+podman build \
    --build-arg WINE_FLAVOR=stable \
    --build-arg ENABLE_WINETRICKS=false \
    --build-arg INSTALL_DEBUG_TOOLS=true \
@@ -105,8 +106,8 @@ docker build \
 ## Build and release workflows
 
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml): validates shell syntax and builds the stable, staging, and debug images in CI.
-- [`.github/workflows/docker-developer.yml`](.github/workflows/docker-developer.yml): publishes developer images from `main`.
-- [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml): publishes release images from version tags.
+- [`.github/workflows/docker-developer.yml`](.github/workflows/docker-developer.yml): build-only developer validation from `main`.
+- [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml): build-only release validation from version tags; it never publishes.
 
 ---
 
