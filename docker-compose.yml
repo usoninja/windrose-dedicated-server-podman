@@ -4,6 +4,7 @@ services:
     pull_policy: never
     container_name: ${CONTAINER_NAME:-windrose}
     hostname: ${HOSTNAME:-localhost}
+    userns_mode: keep-id
     restart: unless-stopped
     stop_grace_period: 90s
     network_mode: host

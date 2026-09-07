@@ -281,8 +281,18 @@ mkdir -p data steam-home
 sudo chown -R "$(awk -F= '$1 == "PUID" {print $2}' .env):$(awk -F= '$1 == "PGID" {print $2}' .env)" data steam-home
 ```
 
-With rootless Podman, use the host user that runs Podman for `PUID` and `PGID`;
-container root cannot override host filesystem permissions on a bind mount.
+With rootless Podman, this Compose file uses `userns_mode: keep-id` so the
+container user configured by `PUID` and `PGID` maps to the host user running
+Podman. If the server was previously run without this setting and the bind
+mounts were changed to subordinate UID ownership, repair them once from the
+repository root:
+
+```bash
+podman unshare chown -R 0:0 data steam-home
+```
+
+Container root cannot otherwise override host filesystem permissions on a bind
+mount.
 
 ## Multiple worlds
 
