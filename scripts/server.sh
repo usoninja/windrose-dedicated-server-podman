@@ -3,16 +3,22 @@
 shutdown_server() {
   log_info "Stopping Windrose dedicated server"
   pkill -TERM -u steam -f 'WindroseServer-Win64-Shipping.exe' 2>/dev/null || true
-  pkill -TERM -u steam -f 'wineserver' 2>/dev/null || true
 
   for _ in $(seq 1 30); do
-    if ! pgrep -u steam -f 'WindroseServer-Win64-Shipping.exe|wineserver' >/dev/null 2>&1; then
+    if ! pgrep -u steam -f 'WindroseServer-Win64-Shipping.exe' >/dev/null 2>&1; then
       break
     fi
     sleep 1
   done
 
-  pkill -KILL -u steam -f 'WindroseServer-Win64-Shipping.exe|wineserver' 2>/dev/null || true
+  if pgrep -u steam -f 'WindroseServer-Win64-Shipping.exe' >/dev/null 2>&1; then
+    log_warn "Windrose did not exit cleanly; forcing the game process to stop"
+    pkill -KILL -u steam -f 'WindroseServer-Win64-Shipping.exe' 2>/dev/null || true
+  fi
+
+  log_info "Waiting for Wine to flush pending save data"
+  run_as_steam "timeout 30 wineserver -w" || log_warn "Wine did not finish draining before timeout"
+  pkill -TERM -u steam -f 'wineserver' 2>/dev/null || true
 }
 
 update_server() {
