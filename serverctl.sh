@@ -449,7 +449,11 @@ stop_server() {
 }
 
 server_is_running() {
-  dc ps --status running --services 2>/dev/null | grep -Fx "$SERVICE_NAME" >/dev/null 2>&1
+  local container_name
+
+  container_name="$(dotenv_value CONTAINER_NAME 2>/dev/null || true)"
+  container_name="${container_name:-$SERVICE_NAME}"
+  [[ "$("${PODMAN_CMD[@]}" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null || true)" == "true" ]]
 }
 
 require_jq() {
@@ -1189,7 +1193,7 @@ status_server() {
   compose_status="unknown"
   compose_name="$container_name"
   local compose_line
-  compose_line="$(dc ps --all --format '{{.Service}}|{{.State}}|{{.Status}}|{{.Name}}' 2>/dev/null | awk -F'|' -v svc="$SERVICE_NAME" '$1 == svc {print; exit}' || true)"
+  compose_line="${SERVICE_NAME}|$("${PODMAN_CMD[@]}" inspect -f '{{.State.Status}}|{{.State.Status}}|{{.Name}}' "$container_name" 2>/dev/null || true)"
   if [[ -n "$compose_line" ]]; then
     compose_state="$(printf '%s' "$compose_line" | awk -F'|' '{print $2}')"
     compose_status="$(printf '%s' "$compose_line" | awk -F'|' '{print $3}')"
