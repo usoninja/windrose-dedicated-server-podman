@@ -388,12 +388,27 @@ start_server() {
   log_step_done
 
   log_step "Starting server ($ACTIVE_MODE mode)"
-  if ! dc up -d >/dev/null 2>&1; then
+  if ! compose_up_with_diagnostics; then
     log_step_failed
     log_error "Failed to start server."
     exit 1
   fi
   log_step_done
+}
+
+compose_up_with_diagnostics() {
+  local output_file
+
+  output_file="$(mktemp)"
+  if dc up -d >"$output_file" 2>&1; then
+    rm -f "$output_file"
+    return 0
+  fi
+
+  log_error "Podman Compose reported:"
+  sed 's/^/  /' "$output_file"
+  rm -f "$output_file"
+  return 1
 }
 
 stop_server() {
@@ -3666,7 +3681,7 @@ setup_server() {
     fi
 
     log_step "Starting server"
-    if ! dc up -d >/dev/null 2>&1; then
+    if ! compose_up_with_diagnostics; then
       log_step_failed
       log_error "Failed to start server."
       exit 1
