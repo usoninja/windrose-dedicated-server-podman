@@ -397,7 +397,7 @@ start_server() {
 }
 
 compose_up_with_diagnostics() {
-  local output_file
+  local output_file image_name
 
   output_file="$(mktemp)"
   if dc up -d >"$output_file" 2>&1; then
@@ -407,6 +407,33 @@ compose_up_with_diagnostics() {
 
   log_error "Podman Compose reported:"
   sed 's/^/  /' "$output_file"
+
+  if grep -Eiq 'image[^[:space:]]*[[:space:]].*not known|no container with name or ID' "$output_file"; then
+    if prompt_confirm_default_no "Build the local image again and retry starting the server?"; then
+      image_name="$(dotenv_value IMAGE_NAME || true)"
+      image_name="${image_name:-localhost/windrose-ds:stable}"
+
+      log_step "Rebuilding local image $image_name"
+      if ! "${PODMAN_CMD[@]}" build --pull=missing -t "$image_name" "$SCRIPT_DIR"; then
+        log_step_failed
+        log_error "Failed to rebuild local image '$image_name'."
+        rm -f "$output_file"
+        return 1
+      fi
+      log_step_done
+
+      log_step "Retrying server start"
+      if dc up -d >"$output_file" 2>&1; then
+        rm -f "$output_file"
+        log_step_done
+        return 0
+      fi
+      log_step_failed
+      log_error "Podman Compose reported on retry:"
+      sed 's/^/  /' "$output_file"
+    fi
+  fi
+
   rm -f "$output_file"
   return 1
 }

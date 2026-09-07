@@ -916,6 +916,7 @@ Common quick fixes:
 | ---------------------------------------------------- | --------------------------------------------------------------------- |
 | `wine: '/home/steam' is not owned by you`            | Set `PUID` and `PGID` correctly in `.env`, then restart the container |
 | `Server is already active for display 99`            | Stale Xvfb lock — entrypoint removes it automatically on restart      |
+| Missing local image or container during `./windrose start` | The command offers to rebuild the configured local image and retry    |
 | Config reset after restart                           | Edit JSON only when container is stopped                              |
 | Server not visible to players                        | Share the `InviteCode` from `ServerDescription.json`                  |
 | Players have issues after a game patch               | Keep the dedicated server version updated to match the game version   |
