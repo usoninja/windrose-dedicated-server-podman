@@ -728,13 +728,19 @@ Operator note: if both `RocksDB` and `RocksDB_v2` exist at the same time, `./win
    - Stove: `C:\Users\{UserName}\AppData\Local\R5\Saved\SaveProfiles\StoveDefault\RocksDB\{GameVersion}\Worlds\{WorldID}` or `...\RocksDB_v2\{GameVersion}\Worlds\{WorldID}`
    - Example: `C:\Users\YarrHarrPirate\AppData\Local\R5\Saved\SaveProfiles\76561199699067790\RocksDB_v2\0.8.0\Worlds\EC10598E83A14ED04D9C44CBFBF3F4B1`
 
-3. **Copy the entire world folder** to the dedicated server data directory, preserving the folder name exactly:
+3. **Copy the entire world folder** to the dedicated-server save root, preserving the folder name exactly:
 
    ```text
    data/R5/Saved/SaveProfiles/Default/RocksDB/<game-version>/Worlds/
    or
    data/R5/Saved/SaveProfiles/Default/RocksDB_v2/<game-version>/Worlds/
    ```
+
+   For a client-hosted world on a migrated `0.10.0` installation, use the
+   complete `RocksDB_v2` world directory. Do not merge the legacy directory
+   into it. A legacy directory containing only `CURRENT`, `MANIFEST`,
+   `OPTIONS`, and `WorldDescription.json` is only a metadata stub, not a
+   complete database.
 
    Example using `scp` from a local machine (copy folder as-is):
 
@@ -744,7 +750,7 @@ Operator note: if both `RocksDB` and `RocksDB_v2` exist at the same time, `./win
 
    Use the copied folder name exactly. Do not rename world folders.
 
-   Restore note: copy the `WorldID` folder directly into `.../Worlds/`. Do not create nested `Worlds/Worlds/...` paths. Helper commands (`./windrose worlds`, `./windrose worlds-check`, `./windrose switch`, `./windrose worlds-prune`) auto-detect `RocksDB_v2` or `RocksDB`.
+   Restore note: copy the `WorldID` folder directly into one `.../Worlds/` directory. Do not create nested `Worlds/Worlds/...` paths. Helper commands (`./windrose worlds`, `./windrose worlds-check`, `./windrose switch`, `./windrose worlds-prune`) auto-detect `RocksDB_v2` or `RocksDB`.
 
 4. **Set the world ID** in `data/R5/ServerDescription.json`:
 

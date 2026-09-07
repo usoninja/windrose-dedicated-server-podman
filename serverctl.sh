@@ -513,6 +513,14 @@ world_exists_in_save_root() {
   find "$save_root" -mindepth 3 -maxdepth 3 -type d -path "*/Worlds/$world_id" -print -quit 2>/dev/null | grep -q .
 }
 
+world_has_rocksdb_files() {
+  local world_dir="$1"
+
+  [[ -f "$world_dir/CURRENT" ]] || return 1
+  [[ -f "$world_dir/IDENTITY" ]] || return 1
+  find "$world_dir" -maxdepth 1 -type f \( -name '*.sst' -o -name '*.blob' \) -print -quit 2>/dev/null | grep -q .
+}
+
 detect_game_version() {
   local deployment_id=""
   local build_id=""
@@ -882,7 +890,7 @@ list_worlds() {
 }
 
 check_worlds() {
-  local version worlds_dir world_id pending_file extra_entry
+  local version worlds_dir world_id pending_file extra_entry secondary_worlds_dir
   local issue_count=0
 
   if ! set_active_save_root; then
@@ -899,6 +907,7 @@ check_worlds() {
   fi
 
   worlds_dir="$(worlds_dir_for_version "$version")"
+  secondary_worlds_dir="$(other_save_root)/$version/Worlds"
   if [[ ! -d "$worlds_dir" ]]; then
     log_warn "Worlds directory does not exist yet: $worlds_dir"
     return 0
@@ -909,6 +918,12 @@ check_worlds() {
   echo -e "${_COLOR_CYAN}  Worlds path:${_COLOR_RESET} $worlds_dir"
 
   while IFS= read -r world_id; do
+    if [[ "$ACTIVE_SAVE_ROOT" == "$ROCKSDB_V2_DIR" && -d "$secondary_worlds_dir/$world_id" ]] && ! world_has_rocksdb_files "$secondary_worlds_dir/$world_id"; then
+      issue_count=$((issue_count + 1))
+      echo -e "  ${_COLOR_YELLOW}- $world_id${_COLOR_RESET}: incomplete legacy RocksDB world (missing table files or IDENTITY)"
+      continue
+    fi
+
     if world_is_initialized "$version" "$world_id"; then
       continue
     fi
