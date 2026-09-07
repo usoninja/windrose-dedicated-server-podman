@@ -5,6 +5,7 @@ services:
     container_name: ${CONTAINER_NAME:-windrose}
     hostname: ${HOSTNAME:-localhost}
     userns_mode: keep-id
+    user: "0:0"
     restart: unless-stopped
     stop_grace_period: 90s
     network_mode: host

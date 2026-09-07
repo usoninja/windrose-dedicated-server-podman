@@ -283,7 +283,9 @@ sudo chown -R "$(awk -F= '$1 == "PUID" {print $2}' .env):$(awk -F= '$1 == "PGID"
 
 With rootless Podman, this Compose file uses `userns_mode: keep-id` so the
 container user configured by `PUID` and `PGID` maps to the host user running
-Podman. If the server was previously run without this setting and the bind
+Podman. The service also starts as container root so the entrypoint can switch
+to the `steam` account without requiring a password. If the server was
+previously run without this setting and the bind
 mounts were changed to subordinate UID ownership, repair them once from the
 repository root:
 
